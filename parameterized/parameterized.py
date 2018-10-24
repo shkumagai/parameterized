@@ -27,27 +27,38 @@ if PY3:
     # Python 3 doesn't have an InstanceType, so just use a dummy type.
     class InstanceType():
         pass
-    lzip = lambda *a: list(zip(*a))
+    lzip = lambda *a: list(zip(*a))  # noqa E731
     text_type = str
     string_types = str,
     bytes_type = bytes
+
     def make_method(func, instance, type):
         if instance is None:
             return func
         return MethodType(func, instance)
+
+    def inspect_getargspec(func):
+        ArgSpec = namedtuple('ArgSpec', 'args varargs keywords defaults')
+        args, varargs, keywords, defaults, _, _, _ = inspect.getfullargspec(func)
+        return ArgSpec(args=args, varargs=varargs, keywords=keywords, defaults=defaults)
 else:
     from types import InstanceType
     lzip = zip
-    text_type = unicode
+    text_type = unicode  # noqa F821
     bytes_type = str
-    string_types = basestring,
+    string_types = basestring,  # noqa F821
+
     def make_method(func, instance, type):
         return MethodType(func, instance, type)
 
+    inspect_getargspec = inspect.getargspec
+
 _param = namedtuple("param", "args kwargs")
+
 
 def skip_on_empty_helper(*a, **kw):
     raise SkipTest("parameterized input is empty")
+
 
 def reapply_patches_if_need(func):
 
@@ -64,6 +75,7 @@ def reapply_patches_if_need(func):
         for patch_obj in tmp_patchings:
             func = patch_obj.decorate_callable(func)
     return func
+
 
 def delete_patches_if_need(func):
     if hasattr(func, 'patchings'):
@@ -92,7 +104,7 @@ class param(_param):
                 pass
         """
 
-    def __new__(cls, *args , **kwargs):
+    def __new__(cls, *args, **kwargs):
         return _param.__new__(cls, args, kwargs)
 
     @classmethod
@@ -130,11 +142,11 @@ class param(_param):
                 raise
             raise TypeError(
                 "Parameters must be tuples, but %r is not (hint: use '(%r, )')"
-                %(args, args),
+                % (args, args),
             )
 
     def __repr__(self):
-        return "param(*%r, **%r)" %self
+        return "param(*%r, **%r)" % self
 
 
 class QuietOrderedDict(MaybeOrderedDict):
@@ -173,7 +185,7 @@ def parameterized_argument_value_pairs(func, p):
             >>> parameterized_argument_value_pairs(func, p)
             [("foo", 1), ("*args", (16, ))]
     """
-    argspec = inspect.getargspec(func)
+    argspec = inspect_getargspec(func)
     arg_offset = 1 if argspec.args[:1] == ["self"] else 0
 
     named_args = argspec.args[arg_offset:]
@@ -188,7 +200,7 @@ def parameterized_argument_value_pairs(func, p):
         in zip(named_args, argspec.defaults or [])
     ])
 
-    seen_arg_names = set([ n for (n, _) in result ])
+    seen_arg_names = set([n for (n, _) in result])
     keywords = QuietOrderedDict(sorted([
         (name, p.kwargs[name])
         for name in p.kwargs
@@ -196,12 +208,13 @@ def parameterized_argument_value_pairs(func, p):
     ]))
 
     if varargs:
-        result.append(("*%s" %(argspec.varargs, ), tuple(varargs)))
+        result.append(("*%s" % (argspec.varargs, ), tuple(varargs)))
 
     if keywords:
-        result.append(("**%s" %(argspec.keywords, ), keywords))
+        result.append(("**%s" % (argspec.keywords, ), keywords))
 
     return result
+
 
 def short_repr(x, n=64):
     """ A shortened repr of ``x`` which is guaranteed to be ``unicode``::
@@ -222,6 +235,7 @@ def short_repr(x, n=64):
         x_repr = x_repr[:n//2] + "..." + x_repr[len(x_repr) - n//2:]
     return x_repr
 
+
 def default_doc_func(func, num, p):
     if func.__doc__ is None:
         return None
@@ -229,7 +243,7 @@ def default_doc_func(func, num, p):
     all_args_with_values = parameterized_argument_value_pairs(func, p)
 
     # Assumes that the function passed is a bound method.
-    descs = ["%s=%s" %(n, short_repr(v)) for n, v in all_args_with_values]
+    descs = ["%s=%s" % (n, short_repr(v)) for n, v in all_args_with_values]
 
     # The documentation might be a multiline string, so split it
     # and just work with the first string, ignoring the period
@@ -239,12 +253,13 @@ def default_doc_func(func, num, p):
     if first.endswith("."):
         suffix = "."
         first = first[:-1]
-    args = "%s[with %s]" %(len(first) and " " or "", ", ".join(descs))
+    args = "%s[with %s]" % (len(first) and " " or "", ", ".join(descs))
     return "".join([first.rstrip(), args, suffix, nl, rest])
+
 
 def default_name_func(func, num, p):
     base_name = func.__name__
-    name_suffix = "_%s" %(num, )
+    name_suffix = "_%s" % (num, )
     if len(p.args) > 0 and isinstance(p.args[0], string_types):
         name_suffix += "_" + parameterized.to_safe_name(p.args[0])
     return base_name + name_suffix
@@ -257,14 +272,16 @@ _test_runner_aliases = {
     "_pytest": "pytest",
 }
 
+
 def set_test_runner(name):
     global _test_runner_override
     if name not in _test_runners:
         raise TypeError(
             "Invalid test runner: %r (must be one of: %s)"
-            %(name, ", ".join(_test_runners)),
+            % (name, ", ".join(_test_runners)),
         )
     _test_runner_override = name
+
 
 def detect_runner():
     """ Guess which test runner we're using by traversing the stack and looking
@@ -290,6 +307,7 @@ def detect_runner():
         else:
             _test_runner_guess = None
     return _test_runner_guess
+
 
 class parameterized(object):
     """ Parameterize a test case::
@@ -331,7 +349,7 @@ class parameterized(object):
                         "class, or '@parameterized.expand' "
                         "(see http://stackoverflow.com/q/54867/71522 for more "
                         "information on old-style classes)."
-                    ) %(test_self, ))
+                    ) % (test_self, ))
 
             original_doc = wrapper.__doc__
             for num, args in enumerate(wrapper.parameterized_input):
@@ -360,11 +378,11 @@ class parameterized(object):
                     "`parameterized([], skip_on_empty=True)` to skip "
                     "this test when the input is empty)"
                 )
-            wrapper = wraps(test_func)(lambda: skip_on_empty_helper())
+            wrapper = wraps(test_func)(lambda: skip_on_empty_helper())  # noqa F811
 
         wrapper.parameterized_input = input
         wrapper.parameterized_func = test_func
-        test_func.__name__ = "_parameterized_original_%s" %(test_func.__name__, )
+        test_func.__name__ = "_parameterized_original_%s" % (test_func.__name__, )
 
         return wrapper
 
@@ -427,7 +445,7 @@ class parameterized(object):
         #    https://github.com/wolever/nose-parameterized/pull/31)
         if not isinstance(input_values, list):
             input_values = list(input_values)
-        return [ param.from_decorator(p) for p in input_values ]
+        return [param.from_decorator(p) for p in input_values]
 
     @classmethod
     def expand(cls, input, name_func=None, doc_func=None, skip_on_empty=False,
